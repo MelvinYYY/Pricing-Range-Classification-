@@ -1,0 +1,616 @@
+---
+title: "BUAN 5310 Final EDA"
+author: 'Weihao Yuan (Melvin), Avanti Likhite, Ye Xu, Jingnan Yang'
+date: "May 4, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r results = "hide", message=FALSE, echo=FALSE, warning=FALSE}
+# Clear packages 
+if(is.null(sessionInfo()$otherPkgs) == FALSE)lapply(
+  paste("package:", names(sessionInfo()$otherPkgs), sep=""), 
+  detach, character.only = TRUE, unload = TRUE)
+
+# Clear environment
+rm(list = ls(all = TRUE)) 
+```
+
+```{r}
+#Please install this package 
+
+#install.packages("corrplot")
+```
+
+## BUAN 5310 Final Project EDA
+```{r results='hide'}
+# load package 
+library(ggplot2)
+library(ISLR)
+library(gridExtra)
+```
+
+Data format looks good. 
+```{r}
+#Load Data
+dat <- read.csv("Mobile.csv", header = T, stringsAsFactors = FALSE)
+dat$price_range <- as.factor(dat$price_range)
+head(dat)
+```
+
+```{r}
+sum(is.na(dat))
+```
+No mising Value -- Great
+
+```{r}
+dim(dat)
+```
+This dataset contain 2000 observations and 21 variable
+
+- Four price range is dependent variable. This indicates that there are four market niche. This is the target variable with value of 0(low cost), 1(medium cost), 2(high cost) and 3(very high cost).
+
+Equal sample 500 from each market niche.
+
+
+- Dummy varibles: 
+1. dual sim card: half and half 
+2. color of blue: 49.5% of cell phone has blue tooth. Really, half of the sample population? Okay...
+3. four_g: 52.15%. half and half 
+4. 3g: 76.15% have 3g
+5. touch-screen: 50.3% half and half
+6. wifi: 50.7% are wifi support. half and half. 
+
+```{r}
+summary(dat)
+```
+
+
+quick plots for predictor 
+
+battery power seems matter 0, 1 &2, 3
+
+clock speed doesn't matter 
+
+fc Front Camera mega pixels doesn't matter? Really. Look into this
+
+Front Camera mega pixels doesn't matter? Really. Look into this
+
+
+Mobile Depth in cm doesn't matter 
+
+Weight matter in range 3
+
+
+Number of cores of processor not that matter 
+
+
+Primary Camera mega pixels doesn't matter? Really. Look into this
+
+height & width matter 
+
+ram definetly matter 
+
+screen height and width not matter 
+
+talk time matters, maybe. 
+
+```{r}
+for(var in names(dat[,-c(2, 4, 6, 18, 19, 20, 21)])){
+ print(qplot(x=dat$price_range, y=dat[,var], data = dat, fill=dat$price_range, geom='boxplot', ylab = var, xlab = "price range")+
+         guides(fill=FALSE))
+}
+```
+
+
+Correlaton: 
+
+No high correlation between each predictors, except pc-fc, 3g-4g, (px_width % px_height). 
+
+3g is the base of 4g. It makes sense
+
+```{r}
+library(corrplot)
+dcor <- round(cor(dat[,-21]),2)
+corrplot(dcor, method="circle",type="lower")
+```
+
+###========================================================
+## Start building models
+
+1. LDA
+2. QDA
+3. KNN
+4. Random Forest
+
+```{r}
+# Load library for model building
+library(MASS)
+library(leaps)
+library(caret)
+library(klaR)
+```
+
+```{r}
+## Split data
+levels(dat$price_range)<- c("Class_0", "Class_1", "Class_2", "Class_3")
+
+# define training and testing data
+set.seed(998)
+inTraining <- createDataPartition(dat$price_range, p = .8, list = FALSE)
+
+# Use 80% of the original data as training set
+training <- dat[ inTraining,]
+
+# a set of predictor 
+training.x <-training[, c(1:(ncol(training)-1))]
+
+# dependent variable
+training.y <- training$price_range
+
+
+# The remaining 20% as the test data set
+# Pretend its the unknow data from the future 
+testing  <- dat[-inTraining,]
+
+
+```
+
+### Stepwise model selection for LDA, QDA
+```{r}
+# Set up 10-folds cross validation to select the best predictors for LDA AND QDA
+cctrl1 <- trainControl(method = "cv",
+                       number = 10, # 10-fold CV
+                       returnResamp = "all",
+                       classProbs = TRUE)
+```
+
+```{r}
+# Set up bootstrap cross validation to select the best predictors for LDA AND QDA
+#cctrl2 <- trainControl(method = "boot",
+#                       number = 10, # number of resampling iterations
+#                       returnResamp = "all",
+#                       classProbs = TRUE)
+# We also use bootstrap cv and compare the result with 10-folds cv. They both yield the same result
+# So we are not running this chunk of code for the sake of running time
+```
+
+#### LDA with stepwise selection 
+```{r echo=FALSE, message=FALSE, results='hide'}
+# using 10-folds cross validation to select the optimal predictors
+set.seed(998)
+step.lda <- train(training.x, training.y, 
+                      method = "stepLDA", #Linear Discriminant Analysis with Stepwise Feature Selection
+                  
+                      trControl = cctrl1,
+                      metric = "Accuracy", 
+                      preProc = c("center", "scale"))
+```
+
+
+```{r}
+step.lda$results$Accuracy
+lda_error_rate <- 1- step.lda$results$Accuracy
+lda_error_rate
+plot(step.lda$finalModel)
+```
+
+
+```{r}
+# using bootstrap cv to select the optimal predictors
+# set.seed(998)
+# step.lda.2 <- train(training.x, training.y, 
+#                      method = "stepLDA", #Linear Discriminant Analysis with Stepwise Feature Selection
+#                      trControl = cctrl2,
+#                     metric = "Accuracy", 
+#                      preProc = c("center", "scale"))
+# We also use bootstrap cv and compare the result with 10-folds cv. They both yield the same result
+# So we are not running this chunk of code for the sake of running time
+```
+
+#### QDA with stepwise selection 
+```{r echo=FALSE, message=FALSE, results='hide'}
+# using 10-folds cross validation to select the optimal predictors
+set.seed(998)
+step.qda <- train(training.x, training.y, 
+                      method = "stepQDA", #Quadratic Discriminant Analysis with Stepwise Feature Selection
+                      trControl = cctrl1,
+                      metric = "Accuracy", 
+                      preProc = c("center", "scale"))
+```
+
+```{r}
+step.qda$results$Accuracy
+qda_error_rate <- 1- step.qda$results$Accuracy
+qda_error_rate
+plot(step.qda$finalModel)
+# Similar to lda model
+```
+
+#### Find the best k size (neighborhood size) using 10 fold-CV errors.
+
+```{r echo=FALSE, message=FALSE, results='hide'}
+# We use two methods: one is using caret package, another method is writing function using 10-folds cross validation to select the optimal k
+# set.seed(998)
+# knnFit1 <- train(training.x, training.y, 
+#                     method = "knn", 
+#                     trControl = cctrl1,
+#                     tuneLength = 100, 
+#                      preProc = c("center", "scale"))
+```
+
+
+```{r}
+# write function to select best k
+cv.knn<- function (dataY, dataX, kn=1, K=10, seed=998) {
+  n <- nrow(dataX)
+  set.seed(seed)
+  library(class)
+  
+  f <- ceiling(n/K)
+  s <- sample(rep(1:K, f), n)  
+ 
+  CV=NULL;PvsO=NULL
+  
+  for (i in 1:K) { 
+    test.index <- seq_len(n)[(s == i)] #test data
+    train.index <- seq_len(n)[(s != i)] #training data
+   
+    train.X <- dataX[train.index,]
+    test.X <- dataX[test.index,]
+    train.y <- dataY[train.index]
+    test.y <- dataY[test.index]
+    #predicted test set y
+    knn.pred=knn(train.X, test.X, train.y, k=kn) 
+    #observed - predicted on test data 
+    error= mean(knn.pred!=test.y) 
+    #error rates 
+    CV=c(CV,mean(error))
+    predvsobs=data.frame(knn.pred,test.y)
+    PvsO=rbind(PvsO,predvsobs)
+  } 
+  
+  #Output
+  list(k = K,
+       knn_error_rate = mean(CV), confusion=table(PvsO[,1],PvsO[,2]), seed=seed)
+}
+```
+
+```{r}
+cv.error=NULL
+for (i in 1:100) {
+  cv.error[i] <- cv.knn(dataY=training.y, dataX=training.x, kn=i, 
+                        K=10, seed=998)$knn_error_rate
+ 
+}
+k=which(cv.error==min(cv.error)) # the best k with least cv testing error
+print(k)
+knn_error_rate=cv.knn(dataY=training.y, dataX=training.x, kn=k, K=10, seed=998)
+knn_error_rate
+```
+
+```{r}
+plot(cv.error[1:30], xlab = "Number of Neighbors", ylab = "Misclassification Rate", 
+     col=ifelse(cv.error[1:30] == min(cv.error[1:30]), "red", "black"), 
+     pch = ifelse(cv.error[1:30] == min(cv.error[1:30]), 19, 1), 
+     cex = ifelse(cv.error[1:30] == min(cv.error[1:30]), 2, 1))
+
+```
+
+
+#### Decision tree
+```{r echo = FALSE, include = TRUE}
+set.seed(998)
+subset <-sample(nrow(training),nrow(training)*0.7)
+train<-training[subset,]
+test<-training[-subset,]
+head(test)
+```
+
+```{r echo = FALSE, include = TRUE}
+library(tree)
+Model_1<-tree(factor(price_range)~.,train )
+summary(Model_1)
+```
+
+```{r echo = FALSE, include = TRUE, fig.height=10, fig.width=17}
+plot(Model_1,text(Model_1,use.n=TRUE, all=TRUE, cex=0.7))
+text(Model_1,pretty=1)
+```
+
+##### Confusion Matrix for decision tree
+```{r echo = FALSE, include = TRUE}
+tree.prediction<-predict(Model_1,newdata=test,type = "class")
+
+Error_Rate<-table(tree.prediction, test[['price_range',exact=FALSE]])
+
+mean(tree.prediction !=test[['price_range',exact=FALSE]])
+mean(tree.prediction ==test[['price_range',exact=FALSE]])
+```
+
+
+
+```{r echo = FALSE, include = TRUE}
+set.seed(998)
+cross_validation<-cv.tree(Model_1)
+plot(cross_validation$size,cross_validation$dev,xlab = "Size of Tree",ylab = "Deviance",type = "b")
+```
+
+```{r echo = FALSE, include = TRUE,fig.width=17 }
+prune.Model_1<-prune.tree(Model_1,best=6)
+plot(prune.Model_1)
+text(prune.Model_1,pretty=0)
+
+```
+
+```{r}
+summary(prune.Model_1)
+```
+
+##### Confusion matrix for pruned tree
+```{r echo = FALSE, include = TRUE}
+prune.predict<-predict(prune.Model_1,newdata=test,type = "class")
+
+table(prune.predict, test[['price_range',exact=FALSE]])
+mean(prune.predict !=test[['price_range',exact=FALSE]])
+mean(prune.predict ==test[['price_range',exact=FALSE]])
+```
+
+##### Random Forest
+```{r echo = FALSE, include = TRUE ,warning=FALSE,message=FALSE}
+library(randomForest)
+bag.Model_1<-randomForest(price_range~.,train,importance=TRUE,mtry=13)
+#importance(bag.Model_1)
+summary(bag.Model_1)
+```
+
+##### Confusion matrix for bagged tree
+```{r echo = FALSE, include = TRUE}
+
+bag.Model_1_predict<-predict(bag.Model_1,newdata = test, type = "class")
+
+table(bag.Model_1_predict, test[['price_range',exact=FALSE]])
+
+mean(bag.Model_1_predict !=test[['price_range',exact=FALSE]])
+mean(bag.Model_1_predict ==test[['price_range',exact=FALSE]])
+```
+
+```{r echo = FALSE, include = TRUE}
+rf.Model_1<-randomForest(price_range~.,train,importance=TRUE,mtry=sqrt(13))
+importance(rf.Model_1)
+
+```
+
+##### Confusion Matrix for Random Forest
+```{r echo = FALSE, include = TRUE}
+
+rf.Model_1.predict<-predict(rf.Model_1, newdata = test, type = "class")
+
+table(rf.Model_1.predict, test[['price_range',exact=FALSE]])
+
+```
+
+```{r echo = FALSE, include = TRUE}
+summary(rf.Model_1)
+table(rf.Model_1.predict, test$price_range)
+```
+
+```{r}
+mean(rf.Model_1.predict !=test[['price_range',exact=FALSE]])
+mean(rf.Model_1.predict ==test[['price_range',exact=FALSE]])
+```
+
+```{r}
+cv.randomforest <-
+  function (data, model= price_range~., yname="price_range", K=10, seed=998) {
+    n <- nrow(data)
+    set.seed(seed)
+    
+    datay=data[,yname] #response variable
+    library(tree)
+    #partition the data into K subsets
+    f <- ceiling(n/K)
+    s <- sample(rep(1:K, f), n)  
+    #generate indices 1:10 and sample n of them  
+    # K fold cross-validated error
+    
+    CV=NULL
+    
+    for (i in 1:K) { #i=1
+      test.index <- seq_len(n)[(s == i)] #test data
+      train.index <- seq_len(n)[(s != i)] #training data
+      
+      #model with training data
+      rf.Model_1 = randomForest(model, data[train.index,],importance=TRUE,mtry=sqrt(13))
+      #observed test set y
+      y <- data[test.index, yname]
+      #predicted test set y
+      predy=predict(rf.Model_1, newdata = data[test.index,], type = "class")
+
+      #observed - predicted on test data
+      error= mean(predy != y)
+      #error rates 
+      CV=c(CV,error)
+    }
+    #Output
+    list(call = model, K = K, 
+         randomforest_error_rate = mean(CV), seed = seed)  
+  }
+```
+
+```{r}
+er_random= cv.randomforest(data=training, model=price_range~., yname="price_range", K=10, seed=998)
+er_random$randomforest_error_rate
+```
+
+
+After comparing the cross validation error for all the 4 models, we think knn is the best model. We apply the best model to the testing data we set aside in the beginning of our analysis.
+
+```{r}
+knn.pred = knn(training.x, testing[,-ncol(testing)], training.y, k = 19)
+table(knn.pred, testing$price_range)
+mean(knn.pred != testing$price_range)
+```
+
+
+
+
+
+
+
+###==============================================================
+### Code below is draft. We don't really need it. 
+### Just leave here to prove we did some work
+###==============================================================
+#Use Cross-Validation with QDA, choosing only three variables
+
+cv.qda<-
+  function (data, model=price_range ~ ram + battery_power + px_height, yname="price_range", K=10) {
+    n <- nrow(data)
+    datay=data[,yname] #response variable
+    
+    #Load Library
+    library(MASS)
+    #partition the data into K subsets
+    f <- ceiling(n/K)
+    s <- sample(rep(1:K, f), n)  
+    #generate indices 1:10 and sample n of them  
+    # K fold cross-validated error
+    
+    CV=NULL
+    
+    for (i in 1:K) { #i=1
+      train.index <- seq_len(n)[(s != i)] #training data
+      test.index <- seq_len(n)[(s == i)] #test data
+      
+      
+      #model with training data
+      qda.fit=qda(model, data=data[train.index,])
+      #observed test set y
+      qda.y <- data[test.index, yname]
+      #predicted test set y
+      qda.predy=predict(qda.fit, data[test.index,])$class
+      
+      #observed - predicted on test data
+      error= mean(qda.y!=qda.predy)
+      #error rates 
+      CV=c(CV,error)
+    }
+    #Output
+    list(call = model, K = K, 
+         qda_error_rate = mean(CV))  
+  }
+
+==========================================================================================================================
+mean.qda.error <- 
+  function(times = 1000){
+    
+    mean.qda.error <- c()
+    
+    for(i in 1:1000){
+      fun <- cv.qda(dat, model=price_range ~ ram + battery_power+ px_height, yname="price_range", K=10)
+      
+      mean.qda.error[i] <- fun$qda_error_rate
+    }
+    
+    #Output 
+    mean(mean.qda.error)
+    
+  }
+
+mean.qda.error(times = 1000)
+==========================================================================================================================
+
+
+#LDA with stepwise selection 
+
+cv.lda<-
+  function (data, model=price_range ~ ram + battery_power + px_height, yname="price_range", K=10) {
+    n <- nrow(data)
+    datay=data[,yname] #response variable
+    
+    #Load Library
+    library(MASS)
+    #partition the data into K subsets
+    f <- ceiling(n/K)
+    s <- sample(rep(1:K, f), n)  
+    #generate indices 1:10 and sample n of them  
+    # K fold cross-validated error
+    
+    CV=NULL
+    
+    for (i in 1:K) { #i=1
+      train.index <- seq_len(n)[(s != i)] #training data
+      test.index <- seq_len(n)[(s == i)] #test data
+      
+      
+      #model with training data
+      lda.fit=lda(model, data=data[train.index,])
+      #observed test set y
+      lda.y <- data[test.index, yname]
+      #predicted test set y
+      lda.predy=predict(lda.fit, data[test.index,])$class
+      
+      #observed - predicted on test data
+      error= mean(lda.y!=lda.predy)
+      #error rates 
+      CV=c(CV,error)
+    }
+    #Output
+    list(call = model, K = K, 
+         lda_error_rate = mean(CV))  
+  }
+==========================================================================================================================
+mean.lda.error <- 
+  function(times = 1000){
+    
+    mean.lda.error <- c()
+    
+    for(i in 1:1000){
+      fun <- cv.lda(dat, model=price_range ~ ram + battery_power+ px_height, yname="price_range", K=10)
+      
+      mean.lda.error[i] <- fun$lda_error_rate
+    }
+    
+    #Output 
+    mean(mean.lda.error)
+    
+  }
+
+mean.lda.error(times = 1000)
+
+============================================================================================================================
+#Draft
+# C.V Model Selection
+
+k =10
+set.seed (1)
+folds = sample (1:k,nrow(dat),replace = TRUE)
+cv.errors = matrix(NA ,k ,20, dimnames = list(NULL , paste (1:20)))
+
+
+# This function allow the predict() apply on regsubsets class
+predict.regsubsets <- function(object, newdata, id, ...) {
+    form <- as.formula(object$call[[2]])
+    mat <- model.matrix(form, newdata)
+    coefi <- coef(object, id = id)
+    xvars <- names(coefi)
+    mat[, xvars] %*% coefi
+}
+
+for (j in 1:k){
+  best.fit = regsubsets(price_range ~., data= dat[folds !=j, ], nvmax =20)
+  
+  for (i in 1:20) {
+  pred = predict(best.fit, newdata = dat[folds ==j,], id=i, type = "response")
+  cv.errors[j,i]= mean(dat$price_range[folds==j] != pred)
+  }
+}
+
+cv.errors
+
+mean.cv.errors <- apply(cv.errors, 2, mean)
+plot(mean.cv.errors, type = "b", xlab = "Number of variables", ylab = "CV error")
