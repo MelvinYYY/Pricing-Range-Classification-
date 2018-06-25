@@ -5,3 +5,4 @@ For any cell phone manufacturer, initiating a pricing strategy plays a crucial r
 
 For the purpose of this study, we have segregated the phones into 4 market segments based on the price. There are several qualitative prediction approaches that can be used to determine the price range, including Linear Discriminant Analysis (LDA), Quadratic Discriminant Analysis (QDA), K-Nearest Neighbors (KNN), and Classification Tree. Our study will use these four methods to create different pricing models and choose the one that can help cell phone manufacturers make the best decision on their pricing strategy. 
 
+The original dataset can be found on https://www.kaggle.com/harlfoxem/housesalesprediction
